@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จัดการออเดอร์ | Admin ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">🛍 ShopZone</div>
+      <ul class="sidebar-nav">
+        <li><a href="/admin">📊 แดชบอร์ด</a></li>
+        <li><a href="/admin/products">📦 จัดการสินค้า</a></li>
+        <li><a href="/admin/orders" class="active">🧾 จัดการออเดอร์</a></li>
+        <li><a href="/admin/members">👥 สมาชิก</a></li>
+        <li><a href="/">🏠 หน้าร้าน</a></li>
+        <li><a href="#" onclick="logout()">🚪 ออกจากระบบ</a></li>
+      </ul>
+    </aside>
+
+    <div class="admin-content">
+      <div class="admin-header">
+        <div>
+          <h2 style="font-weight:700;">จัดการออเดอร์</h2>
+          <p style="color:var(--text-muted);font-size:0.85rem;" id="order-count-label">โหลด...</p>
+        </div>
+      </div>
+
+      <div class="admin-body">
+        <!-- Filter by status -->
+        <div class="filter-wrap mb-24">
+          <button class="filter-tab active" onclick="filterStatus(this,'')">ทั้งหมด</button>
+          <button class="filter-tab" onclick="filterStatus(this,'pending')">รอชำระ</button>
+          <button class="filter-tab" onclick="filterStatus(this,'slip_uploaded')">รอตรวจสลิป</button>
+          <button class="filter-tab" onclick="filterStatus(this,'confirmed')">ยืนยันแล้ว</button>
+          <button class="filter-tab" onclick="filterStatus(this,'shipping')">กำลังจัดส่ง</button>
+          <button class="filter-tab" onclick="filterStatus(this,'completed')">เสร็จสิ้น</button>
+          <button class="filter-tab" onclick="filterStatus(this,'cancelled')">ยกเลิก</button>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>ออเดอร์#</th><th>ลูกค้า</th><th>สินค้า</th>
+                <th>ยอดรวม</th><th>วันที่</th><th>สถานะ</th><th>สลิป</th><th>จัดการ</th>
+              </tr></thead>
+              <tbody id="orders-body">
+                <tr><td colspan="8" style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="status-modal">
+    <div class="modal">
+      <div class="modal-title">อัปเดตสถานะออเดอร์ #<span id="modal-order-id-txt"></span></div>
+      <input type="hidden" id="modal-order-id">
+      <div class="form-group">
+        <label class="form-label">สถานะใหม่</label>
+        <select class="form-control" id="new-status">
+          <option value="pending">รอชำระเงิน</option>
+          <option value="slip_uploaded">แนบสลิปแล้ว</option>
+          <option value="confirmed">ยืนยันแล้ว</option>
+          <option value="shipping">กำลังจัดส่ง</option>
+          <option value="completed">เสร็จสิ้น</option>
+          <option value="cancelled">ยกเลิก</option>
+        </select>
+      </div>
+      <div id="slip-view" class="hidden" style="margin-bottom:16px;">
+        <div class="form-label mb-8">สลิปที่ลูกค้าแนบ:</div>
+        <a id="slip-link" href="#" target="_blank">
+          <img id="slip-img" style="max-width:100%;max-height:200px;border-radius:10px;border:1px solid var(--border);">
+        </a>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeStatusModal()">ปิด</button>
+        <button class="btn btn-primary" onclick="updateStatus()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    let allOrders = [];
+    let currentFilter = '';
+
+    function filterStatus(el, status) {
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      currentFilter = status;
+      renderOrders(status ? allOrders.filter(o => o.status === status) : allOrders);
+    }
+
+    function renderOrders(orders) {
+      document.getElementById('order-count-label').textContent = `แสดง ${orders.length} ออเดอร์`;
+      document.getElementById('orders-body').innerHTML = orders.length ? orders.map(o => `
+        <tr>
+          <td style="font-weight:700;">#${o.id}</td>
+          <td>
+            <div style="font-weight:600;">${o.full_name || o.username}</div>
+            <div style="color:var(--text-muted);font-size:0.78rem;">${o.email}</div>
+          </td>
+          <td style="font-size:0.85rem;">${(o.items || []).slice(0,2).map(i => i.name).join(', ')}${o.items?.length > 2 ? '...' : ''}</td>
+          <td style="font-weight:700;color:var(--primary);">${formatPrice(o.total_amount)}</td>
+          <td style="font-size:0.82rem;color:var(--text-muted);">${formatDate(o.created_at)}</td>
+          <td><span class="status-badge status-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+          <td>
+            ${o.slip_image_url 
+              ? `<a href="${o.slip_image_url}" target="_blank" class="btn btn-primary btn-sm">ดูสลิป</a>`
+              : `<span style="color:var(--text-muted);font-size:0.8rem;">ยังไม่มี</span>`
+            }
+          </td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick='openStatusModal(${o.id}, "${o.status}", "${o.slip_image_url || ''}")'>
+              เปลี่ยนสถานะ
+            </button>
+          </td>
+        </tr>
+      `).join('') : '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">ไม่พบออเดอร์</td></tr>';
+    }
+
+    function openStatusModal(orderId, currentStatus, slipUrl) {
+      document.getElementById('modal-order-id').value = orderId;
+      document.getElementById('modal-order-id-txt').textContent = orderId;
+      document.getElementById('new-status').value = currentStatus;
+      if (slipUrl) {
+        document.getElementById('slip-view').classList.remove('hidden');
+        document.getElementById('slip-img').src = slipUrl;
+        document.getElementById('slip-link').href = slipUrl;
+      } else {
+        document.getElementById('slip-view').classList.add('hidden');
+      }
+      document.getElementById('status-modal').classList.add('open');
+    }
+
+    function closeStatusModal() { document.getElementById('status-modal').classList.remove('open'); }
+
+    async function updateStatus() {
+      const id = document.getElementById('modal-order-id').value;
+      const status = document.getElementById('new-status').value;
+      const data = await api(`/api/orders/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+      });
+      if (data.success) {
+        showToast('อัปเดตสถานะสำเร็จ', 'success');
+        closeStatusModal();
+        await loadOrders();
+      } else {
+        showToast(data.message, 'error');
+      }
+    }
+
+    async function loadOrders() {
+      const data = await api('/api/orders');
+      allOrders = data.success ? data.orders : [];
+      renderOrders(currentFilter ? allOrders.filter(o => o.status === currentFilter) : allOrders);
+    }
+
+    // Check URL param for pre-filter
+    const urlParams = new URLSearchParams(window.location.search);
+    const preFilter = urlParams.get('status');
+    if (preFilter) {
+      currentFilter = preFilter;
+      document.querySelectorAll('.filter-tab').forEach(b => {
+        if (b.textContent === STATUS_LABELS[preFilter]) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    }
+
+    (async () => {
+      const me = await api('/api/auth/me');
+      if (!me.success || !me.user || me.user.role !== 'admin') { window.location.href = '/login'; return; }
+      await loadOrders();
+    })();
+  </script>
+</body>
+</html>

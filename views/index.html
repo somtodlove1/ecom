@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopZone - ช้อปสินค้าออนไลน์</title>
+  <meta name="description" content="ช้อปสินค้าออนไลน์ราคาดี มีทุกอย่างที่คุณต้องการ">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">🛍 ShopZone</a>
+    <ul class="navbar-nav">
+      <a href="/" class="active">หน้าหลัก</a>
+      <span id="nav-admin" style="display:none;">
+        <a href="/admin">⚙️ แผงแอดมิน</a>
+      </span>
+      <a href="/cart" class="cart-badge">
+        🛒 ตะกร้า
+        <span class="badge" id="cart-count" style="display:none;">0</span>
+      </a>
+      <span id="nav-auth"></span>
+    </ul>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-title">ช้อปสินค้า<br><span>คุณภาพดี</span> ราคาเหมาะสม</div>
+      <p style="color:var(--text-muted);max-width:480px;margin-bottom:28px;font-size:1rem;line-height:1.7;">
+        ค้นหาสินค้าจากหลากหลายหมวดหมู่ สั่งซื้อง่าย ชำระเงินสะดวก
+      </p>
+      <div class="search-bar" style="max-width:520px;">
+        <input type="text" id="search-input" placeholder="ค้นหาสินค้า...">
+        <button onclick="loadProducts()">🔍</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <section class="section">
+    <div class="container">
+      <!-- Category Filter -->
+      <div class="filter-wrap" id="categories">
+        <button class="filter-tab active" onclick="filterCat(this, '')" data-cat="">ทั้งหมด</button>
+      </div>
+
+      <!-- Sort + Count -->
+      <div class="flex-between mb-16" style="flex-wrap:wrap;gap:12px;">
+        <div id="product-count" style="color:var(--text-muted);font-size:0.9rem;"></div>
+        <select id="sort-select" class="form-control" style="width:auto;" onchange="loadProducts()">
+          <option value="">เรียงตามค่าเริ่มต้น</option>
+          <option value="price_asc">ราคา: น้อย → มาก</option>
+          <option value="price_desc">ราคา: มาก → น้อย</option>
+          <option value="newest">ใหม่ล่าสุด</option>
+        </select>
+      </div>
+
+      <!-- Products Grid -->
+      <div id="products-grid">
+        <div class="flex-center" style="padding:60px;"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    let selectedCat = '';
+
+    async function loadCategories() {
+      const data = await api('/api/products/cats/all');
+      if (!data.success) return;
+      const container = document.getElementById('categories');
+      data.categories.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'filter-tab';
+        btn.textContent = cat.name;
+        btn.dataset.cat = cat.slug;
+        btn.onclick = function() { filterCat(this, cat.slug); };
+        container.appendChild(btn);
+      });
+    }
+
+    function filterCat(el, slug) {
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      selectedCat = slug;
+      loadProducts();
+    }
+
+    async function loadProducts() {
+      const search = document.getElementById('search-input').value;
+      const sort = document.getElementById('sort-select').value;
+      let url = '/api/products?';
+      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (selectedCat) url += `category=${selectedCat}&`;
+      if (sort) url += `sort=${sort}`;
+
+      const grid = document.getElementById('products-grid');
+      grid.innerHTML = '<div class="flex-center" style="padding:60px;"><div class="spinner"></div></div>';
+
+      const data = await api(url);
+      if (!data.success) {
+        grid.innerHTML = '<div class="alert alert-danger">โหลดสินค้าไม่สำเร็จ</div>';
+        return;
+      }
+
+      document.getElementById('product-count').textContent = `พบ ${data.products.length} สินค้า`;
+
+      if (data.products.length === 0) {
+        grid.innerHTML = `<div class="empty-state"><div class="icon">📦</div><h3>ไม่พบสินค้า</h3></div>`;
+        return;
+      }
+
+      grid.className = 'products-grid';
+      grid.innerHTML = data.products.map(p => `
+        <div class="product-card">
+          <div class="product-img-wrap" onclick="location.href='/product/${p.id}'">
+            <img class="product-img" src="${p.image_url || ''}" alt="${p.name}" 
+                 onerror="this.src='https://placehold.co/300x220/161628/6C63FF?text=No+Image'">
+          </div>
+          <div class="product-body">
+            <span class="product-category">${p.category_name || 'ทั่วไป'}</span>
+            <div class="product-name" onclick="location.href='/product/${p.id}'">${p.name}</div>
+            <div class="flex-between mt-8" style="align-items:flex-end;gap:8px;">
+              <div>
+                <div class="product-price">${formatPrice(p.price)}</div>
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">
+                  ${p.stock > 0 ? `เหลือ ${p.stock} ชิ้น` : '<span style="color:var(--danger)">สินค้าหมด</span>'}
+                </div>
+              </div>
+              ${p.stock > 0 
+                ? `<button class="btn btn-primary btn-sm" onclick="addToCart(${p.id})">🛒 ใส่ตะกร้า</button>`
+                : `<button class="btn btn-secondary btn-sm" disabled>หมด</button>`
+              }
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('search-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadProducts();
+    });
+
+    // Init
+    (async () => {
+      await initNavbar();
+      await loadCategories();
+      await loadProducts();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ชำระเงิน | ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .checkout-grid { display: grid; grid-template-columns: 1fr 380px; gap: 32px; }
+    .step-badge { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: white;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+    .step-title { font-weight: 700; font-size: 1rem; }
+    .qr-box { background: white; border-radius: 16px; padding: 20px; text-align: center; display: inline-block; }
+    #slip-preview { max-width: 200px; max-height: 200px; border-radius: 10px;
+      border: 2px solid var(--primary); margin-top: 12px; display: none; }
+    @media (max-width: 768px) { .checkout-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">🛍 ShopZone</a>
+    <ul class="navbar-nav">
+      <a href="/">หน้าหลัก</a>
+      <a href="/cart">← กลับตะกร้า</a>
+      <span id="nav-auth"></span>
+    </ul>
+  </nav>
+
+  <div class="container section">
+    <h1 class="section-title">💳 ชำระเงิน</h1>
+
+    <div id="loading" class="flex-center" style="padding:80px;"><div class="spinner"></div></div>
+    <div id="main-content" class="hidden">
+
+    <div class="checkout-grid">
+      <!-- Left: Form -->
+      <div>
+        <!-- Step 1: Summary -->
+        <div class="card mb-24">
+          <div class="flex gap-16 mb-16">
+            <div class="step-badge">1</div>
+            <div class="step-title">รายการสินค้า</div>
+          </div>
+          <div id="order-items"></div>
+        </div>
+
+        <!-- Step 2: Shipping -->
+        <div class="card mb-24">
+          <div class="flex gap-16 mb-16">
+            <div class="step-badge">2</div>
+            <div class="step-title">ที่อยู่จัดส่ง</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ที่อยู่จัดส่ง *</label>
+            <textarea class="form-control" id="shipping_address" rows="3" placeholder="บ้านเลขที่ ซอย ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์" required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">หมายเหตุ (ถ้ามี)</label>
+            <input type="text" class="form-control" id="note" placeholder="เช่น ฝากไว้ที่หน้าบ้าน">
+          </div>
+        </div>
+
+        <!-- Step 3: Payment Slip -->
+        <div class="card">
+          <div class="flex gap-16 mb-16">
+            <div class="step-badge">3</div>
+            <div class="step-title">ชำระเงินและแนบสลิป</div>
+          </div>
+
+          <div style="text-align:center;margin-bottom:24px;">
+            <div class="qr-box">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PromptPay:0812345678" 
+                   alt="QR Code ชำระเงิน" width="200" height="200">
+            </div>
+            <div style="margin-top:12px;color:var(--text-muted);font-size:0.9rem;">
+              สแกน QR Code เพื่อชำระผ่าน PromptPay<br>
+              <strong style="color:var(--text);">081-234-5678</strong>
+            </div>
+            <div style="font-size:1.5rem;font-weight:700;margin-top:8px;" id="qr-amount" style="color:var(--primary);"></div>
+          </div>
+
+          <label class="form-label">แนบสลิปการโอนเงิน *</label>
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('slip-file').click()">
+            <div class="icon">📎</div>
+            <p>คลิกหรือลากไฟล์มาวางที่นี่</p>
+            <p style="font-size:0.8rem;margin-top:4px;">รองรับ JPG, PNG, PDF (สูงสุด 10MB)</p>
+          </div>
+          <input type="file" id="slip-file" accept="image/*" hidden onchange="previewSlip(this)">
+          <div style="text-align:center;">
+            <img id="slip-preview" alt="Preview สลิป">
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Summary -->
+      <div>
+        <div class="summary-card" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:28px;position:sticky;top:90px;">
+          <div style="font-size:1.1rem;font-weight:700;margin-bottom:20px;">สรุปการสั่งซื้อ</div>
+          <div id="order-summary-rows"></div>
+          <hr style="border-color:var(--border);margin:16px 0;">
+          <div class="flex-between">
+            <span style="font-weight:700;">รวมชำระ</span>
+            <span style="font-size:1.5rem;font-weight:700;color:var(--primary);" id="total-display">฿0</span>
+          </div>
+          <div id="alert-area" style="margin-top:16px;"></div>
+          <button class="btn btn-primary btn-lg" style="width:100%;margin-top:16px;" id="submit-btn" onclick="submitOrder()">
+            ✅ ยืนยันคำสั่งซื้อ
+          </button>
+          <div style="text-align:center;margin-top:12px;font-size:0.8rem;color:var(--text-muted);">
+            🔒 ข้อมูลของคุณปลอดภัย
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- end main-content -->
+  </div>
+
+  <!-- Success Modal -->
+  <div class="modal-overlay" id="success-modal">
+    <div class="modal" style="text-align:center;">
+      <div style="font-size:4rem;margin-bottom:16px;">🎉</div>
+      <div style="font-size:1.5rem;font-weight:700;margin-bottom:8px;">สั่งซื้อสำเร็จ!</div>
+      <p style="color:var(--text-muted);margin-bottom:24px;">ขอบคุณที่ช้อปกับ ShopZone<br>เราจะดำเนินการตรวจสอบสลิปและจัดส่งสินค้าให้เร็วที่สุด</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <a href="/orders" class="btn btn-primary">ดูออเดอร์ของฉัน</a>
+        <a href="/" class="btn btn-secondary">ช้อปต่อ</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    let cartTotal = 0;
+
+    function previewSlip(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.getElementById('slip-preview');
+        img.src = e.target.result;
+        img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Drag & Drop
+    const zone = document.getElementById('upload-zone');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        document.getElementById('slip-file').files = e.dataTransfer.files;
+        previewSlip({ files: [file] });
+      }
+    });
+
+    async function loadCart() {
+      const data = await api('/api/cart');
+      document.getElementById('loading').classList.add('hidden');
+
+      if (!data.success || data.items.length === 0) {
+        showToast('ตะกร้าสินค้าว่างเปล่า', 'warning');
+        setTimeout(() => window.location.href = '/cart', 1500);
+        return;
+      }
+
+      document.getElementById('main-content').classList.remove('hidden');
+      cartTotal = data.total;
+
+      document.getElementById('qr-amount').textContent = formatPrice(data.total);
+      document.getElementById('total-display').textContent = formatPrice(data.total);
+
+      document.getElementById('order-items').innerHTML = data.items.map(item => `
+        <div class="flex-between" style="padding:10px 0;border-bottom:1px solid var(--border);gap:12px;">
+          <div class="flex gap-16" style="align-items:center;">
+            <img src="${item.image_url || ''}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;"
+                 onerror="this.src='https://placehold.co/48x48/161628/6C63FF?text=?'">
+            <div>
+              <div style="font-weight:600;font-size:0.9rem;">${item.name}</div>
+              <div style="color:var(--text-muted);font-size:0.8rem;">x${item.quantity}</div>
+            </div>
+          </div>
+          <div style="font-weight:700;white-space:nowrap;">${formatPrice(item.price * item.quantity)}</div>
+        </div>
+      `).join('');
+
+      document.getElementById('order-summary-rows').innerHTML = data.items.map(item => `
+        <div class="flex-between mb-8" style="font-size:0.85rem;">
+          <span style="color:var(--text-muted);">${item.name} x${item.quantity}</span>
+          <span>${formatPrice(item.price * item.quantity)}</span>
+        </div>
+      `).join('');
+    }
+
+    async function submitOrder() {
+      const address = document.getElementById('shipping_address').value.trim();
+      const slip = document.getElementById('slip-file').files[0];
+      const alertArea = document.getElementById('alert-area');
+
+      if (!address) {
+        alertArea.innerHTML = '<div class="alert alert-danger">กรุณากรอกที่อยู่จัดส่ง</div>';
+        return;
+      }
+      if (!slip) {
+        alertArea.innerHTML = '<div class="alert alert-danger">กรุณาแนบสลิปการโอนเงิน</div>';
+        return;
+      }
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true; btn.textContent = '⏳ กำลังดำเนินการ...';
+
+      const formData = new FormData();
+      formData.append('slip', slip);
+      formData.append('shipping_address', address);
+      formData.append('note', document.getElementById('note').value);
+
+      try {
+        const res = await fetch('/api/orders/checkout', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('success-modal').classList.add('open');
+        } else {
+          alertArea.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+          btn.disabled = false; btn.textContent = '✅ ยืนยันคำสั่งซื้อ';
+        }
+      } catch {
+        alertArea.innerHTML = '<div class="alert alert-danger">เกิดข้อผิดพลาด กรุณาลองใหม่</div>';
+        btn.disabled = false; btn.textContent = '✅ ยืนยันคำสั่งซื้อ';
+      }
+    }
+
+    (async () => {
+      const me = await api('/api/auth/me');
+      if (!me.success || !me.user) { window.location.href = '/login'; return; }
+      await initNavbar();
+      await loadCart();
+    })();
+  </script>
+</body>
+</html>

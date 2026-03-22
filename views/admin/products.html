@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จัดการสินค้า | Admin ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .product-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; background: var(--bg-card2); }
+  </style>
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">🛍 ShopZone</div>
+      <ul class="sidebar-nav">
+        <li><a href="/admin">📊 แดชบอร์ด</a></li>
+        <li><a href="/admin/products" class="active">📦 จัดการสินค้า</a></li>
+        <li><a href="/admin/orders">🧾 จัดการออเดอร์</a></li>
+        <li><a href="/admin/members">👥 สมาชิก</a></li>
+        <li><a href="/">🏠 หน้าร้าน</a></li>
+        <li><a href="#" onclick="logout()">🚪 ออกจากระบบ</a></li>
+      </ul>
+    </aside>
+
+    <div class="admin-content">
+      <div class="admin-header">
+        <div>
+          <h2 style="font-weight:700;">จัดการสินค้า</h2>
+          <p style="color:var(--text-muted);font-size:0.85rem;" id="product-sub">โหลดข้อมูล...</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAdd()">+ เพิ่มสินค้าใหม่</button>
+      </div>
+
+      <div class="admin-body">
+        <div class="card">
+          <div class="flex-between mb-16" style="flex-wrap:wrap;gap:12px;">
+            <div class="search-bar" style="max-width:320px;">
+              <input type="text" id="search-input" placeholder="ค้นหาสินค้า...">
+              <button onclick="filterProducts()">🔍</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="products-table">
+              <thead><tr>
+                <th>รูป</th><th>ชื่อสินค้า</th><th>หมวดหมู่</th>
+                <th>ราคา</th><th>สต็อก</th><th>สถานะ</th><th>จัดการ</th>
+              </tr></thead>
+              <tbody id="products-body">
+                <tr><td colspan="7" style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="product-modal">
+    <div class="modal">
+      <div class="modal-title" id="modal-title">เพิ่มสินค้า</div>
+      <input type="hidden" id="edit-id">
+      <form id="product-form" enctype="multipart/form-data">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">ชื่อสินค้า *</label>
+            <input type="text" class="form-control" id="p-name" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ราคา (บาท) *</label>
+            <input type="number" class="form-control" id="p-price" step="0.01" min="0" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">จำนวนสต็อก</label>
+            <input type="number" class="form-control" id="p-stock" min="0" value="0">
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">หมวดหมู่</label>
+            <select class="form-control" id="p-category"></select>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">รายละเอียด</label>
+            <textarea class="form-control" id="p-desc" rows="3"></textarea>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">รูปสินค้า</label>
+            <div class="upload-zone" onclick="document.getElementById('p-image').click()">
+              <div class="icon">🖼</div>
+              <p>คลิกเพื่อเลือกรูป</p>
+            </div>
+            <input type="file" id="p-image" accept="image/*" hidden onchange="previewImg(this)">
+            <img id="img-preview" style="max-height:100px;margin-top:8px;border-radius:8px;display:none;">
+          </div>
+          <div class="form-group" id="status-group" style="display:none;">
+            <label class="form-label">สถานะ</label>
+            <select class="form-control" id="p-active">
+              <option value="1">เปิดใช้งาน</option>
+              <option value="0">ปิดการใช้งาน</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary" id="save-btn">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    let allProducts = [];
+    let categories = [];
+
+    function previewImg(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => { const img = document.getElementById('img-preview'); img.src = e.target.result; img.style.display = 'block'; };
+      reader.readAsDataURL(file);
+    }
+
+    async function init() {
+      const [pData, cData] = await Promise.all([
+        api('/api/products/admin/all'),
+        api('/api/products/cats/all')
+      ]);
+      allProducts = pData.success ? pData.products : [];
+      categories = cData.success ? cData.categories : [];
+
+      const catSel = document.getElementById('p-category');
+      catSel.innerHTML = '<option value="">-- เลือกหมวดหมู่ --</option>' +
+        categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+      renderTable(allProducts);
+      document.getElementById('product-sub').textContent = `สินค้าทั้งหมด ${allProducts.length} รายการ`;
+    }
+
+    function filterProducts() {
+      const q = document.getElementById('search-input').value.toLowerCase();
+      const filtered = allProducts.filter(p => p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
+      renderTable(filtered);
+    }
+
+    function renderTable(products) {
+      document.getElementById('products-body').innerHTML = products.length ? products.map(p => `
+        <tr>
+          <td><img class="product-thumb" src="${p.image_url || ''}" onerror="this.src='https://placehold.co/50x50/161628/6C63FF?text=?'"></td>
+          <td><div style="font-weight:600;">${p.name}</div><div style="font-size:0.8rem;color:var(--text-muted);">${(p.description || '').substring(0,50)}...</div></td>
+          <td>${p.category_name || '-'}</td>
+          <td style="font-weight:700;color:var(--primary);">${formatPrice(p.price)}</td>
+          <td><span style="color:${p.stock < 5 ? 'var(--danger)' : 'var(--text)'}">${p.stock}</span></td>
+          <td><span class="status-badge ${p.is_active ? 'status-confirmed' : 'status-cancelled'}">${p.is_active ? 'เปิด' : 'ปิด'}</span></td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick='openEdit(${JSON.stringify(p)})' style="margin-right:4px;">แก้ไข</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id},'${p.name}')">ลบ</button>
+          </td>
+        </tr>
+      `).join('') : '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">ไม่พบสินค้า</td></tr>';
+    }
+
+    function openAdd() {
+      document.getElementById('modal-title').textContent = 'เพิ่มสินค้า';
+      document.getElementById('edit-id').value = '';
+      document.getElementById('product-form').reset();
+      document.getElementById('img-preview').style.display = 'none';
+      document.getElementById('status-group').style.display = 'none';
+      document.getElementById('product-modal').classList.add('open');
+    }
+
+    function openEdit(p) {
+      document.getElementById('modal-title').textContent = 'แก้ไขสินค้า';
+      document.getElementById('edit-id').value = p.id;
+      document.getElementById('p-name').value = p.name;
+      document.getElementById('p-price').value = p.price;
+      document.getElementById('p-stock').value = p.stock;
+      document.getElementById('p-desc').value = p.description || '';
+      document.getElementById('p-category').value = p.category_id || '';
+      document.getElementById('p-active').value = p.is_active ? '1' : '0';
+      document.getElementById('status-group').style.display = 'block';
+      if (p.image_url) { const img = document.getElementById('img-preview'); img.src = p.image_url; img.style.display = 'block'; }
+      document.getElementById('product-modal').classList.add('open');
+    }
+
+    function closeModal() { document.getElementById('product-modal').classList.remove('open'); }
+
+    document.getElementById('product-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const id = document.getElementById('edit-id').value;
+      const btn = document.getElementById('save-btn');
+      btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+
+      const formData = new FormData();
+      formData.append('name', document.getElementById('p-name').value);
+      formData.append('price', document.getElementById('p-price').value);
+      formData.append('stock', document.getElementById('p-stock').value);
+      formData.append('description', document.getElementById('p-desc').value);
+      formData.append('category_id', document.getElementById('p-category').value);
+      if (id) formData.append('is_active', document.getElementById('p-active').value);
+      const img = document.getElementById('p-image').files[0];
+      if (img) formData.append('image', img);
+
+      const url = id ? `/api/products/${id}` : '/api/products';
+      const method = id ? 'PUT' : 'POST';
+
+      try {
+        const res = await fetch(url, { method, credentials: 'include', body: formData });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          closeModal();
+          await init();
+        } else {
+          showToast(data.message, 'error');
+        }
+      } catch { showToast('เกิดข้อผิดพลาด', 'error'); }
+      btn.disabled = false; btn.textContent = 'บันทึก';
+    });
+
+    async function deleteProduct(id, name) {
+      if (!confirm(`ต้องการลบสินค้า "${name}" หรือไม่?`)) return;
+      const data = await api(`/api/products/${id}`, { method: 'DELETE' });
+      if (data.success) { showToast('ลบสินค้าแล้ว', 'success'); await init(); }
+      else showToast(data.message, 'error');
+    }
+
+    (async () => {
+      const me = await api('/api/auth/me');
+      if (!me.success || !me.user || me.user.role !== 'admin') { window.location.href = '/login'; return; }
+      await init();
+    })();
+  </script>
+</body>
+</html>

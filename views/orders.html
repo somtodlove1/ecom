@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ออเดอร์ของฉัน | ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .order-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 20px; overflow: hidden; }
+    .order-header { padding: 16px 20px; background: var(--bg-card2); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .order-body { padding: 20px; }
+    .order-item-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .order-item-row:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">🛍 ShopZone</a>
+    <ul class="navbar-nav">
+      <a href="/">หน้าหลัก</a>
+      <a href="/cart" class="cart-badge">🛒<span class="badge" id="cart-count" style="display:none;">0</span></a>
+      <span id="nav-auth"></span>
+    </ul>
+  </nav>
+
+  <div class="container section">
+    <h1 class="section-title">📦 ออเดอร์ของฉัน</h1>
+
+    <div id="loading" class="flex-center" style="padding:80px;"><div class="spinner"></div></div>
+    <div id="orders-container" class="hidden"></div>
+    <div id="orders-empty" class="empty-state hidden">
+      <div class="icon">📦</div>
+      <h3>ยังไม่มีออเดอร์</h3>
+      <a href="/" class="btn btn-primary" style="margin-top:16px;">ช้อปสินค้าเลย</a>
+    </div>
+  </div>
+
+  <!-- Slip Modal -->
+  <div class="modal-overlay" id="slip-modal">
+    <div class="modal">
+      <div class="modal-title">แนบสลิปการโอนเงิน</div>
+      <input type="hidden" id="modal-order-id">
+      <div class="upload-zone" onclick="document.getElementById('modal-slip').click()">
+        <div class="icon">📎</div>
+        <p>คลิกเพื่อเลือกสลิป</p>
+      </div>
+      <input type="file" id="modal-slip" accept="image/*" hidden onchange="previewModalSlip(this)">
+      <img id="modal-preview" style="max-width:100%;margin-top:12px;border-radius:10px;display:none;">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeSlipModal()">ยกเลิก</button>
+        <button class="btn btn-primary" id="upload-btn" onclick="uploadSlip()">แนบสลิป</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    function previewModalSlip(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.getElementById('modal-preview');
+        img.src = e.target.result; img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function openSlipModal(orderId) {
+      document.getElementById('modal-order-id').value = orderId;
+      document.getElementById('modal-preview').style.display = 'none';
+      document.getElementById('modal-slip').value = '';
+      document.getElementById('slip-modal').classList.add('open');
+    }
+
+    function closeSlipModal() { document.getElementById('slip-modal').classList.remove('open'); }
+
+    async function uploadSlip() {
+      const orderId = document.getElementById('modal-order-id').value;
+      const file = document.getElementById('modal-slip').files[0];
+      if (!file) { showToast('กรุณาเลือกไฟล์สลิป', 'warning'); return; }
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+      const formData = new FormData();
+      formData.append('slip', file);
+      const res = await fetch(`/api/orders/${orderId}/slip`, { method: 'POST', credentials: 'include', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        showToast('แนบสลิปสำเร็จ', 'success');
+        closeSlipModal();
+        await loadOrders();
+      } else {
+        showToast(data.message, 'error');
+      }
+      btn.disabled = false; btn.textContent = 'แนบสลิป';
+    }
+
+    async function loadOrders() {
+      const data = await api('/api/orders/my');
+      document.getElementById('loading').classList.add('hidden');
+
+      if (!data.success) {
+        if (data.message?.includes('เข้าสู่ระบบ')) {
+          window.location.href = '/login'; return;
+        }
+        return;
+      }
+
+      if (data.orders.length === 0) {
+        document.getElementById('orders-empty').classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('orders-container').classList.remove('hidden');
+      document.getElementById('orders-container').innerHTML = data.orders.map(order => `
+        <div class="order-card">
+          <div class="order-header">
+            <div>
+              <div style="font-weight:700;">ออเดอร์ #${order.id}</div>
+              <div style="color:var(--text-muted);font-size:0.8rem;">${formatDate(order.created_at)}</div>
+            </div>
+            <div class="flex gap-8" style="align-items:center;flex-wrap:wrap;">
+              <span class="status-badge status-${order.status}">${STATUS_LABELS[order.status]}</span>
+              ${order.status === 'pending' ? `<button class="btn btn-warning btn-sm" onclick="openSlipModal(${order.id})">📎 แนบสลิป</button>` : ''}
+            </div>
+          </div>
+          <div class="order-body">
+            ${order.items.map(item => `
+              <div class="order-item-row">
+                <img src="${item.image_url}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;" 
+                     onerror="this.src='https://placehold.co/48x48/161628/6C63FF?text=?'">
+                <div style="flex:1;">
+                  <div style="font-weight:600;font-size:0.9rem;">${item.name}</div>
+                  <div style="color:var(--text-muted);font-size:0.8rem;">ราคา ${formatPrice(item.price)} × ${item.quantity}</div>
+                </div>
+                <div style="font-weight:700;">${formatPrice(item.price * item.quantity)}</div>
+              </div>
+            `).join('')}
+            <div class="flex-between" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+              <span style="color:var(--text-muted);">รวมทั้งหมด</span>
+              <span style="font-size:1.1rem;font-weight:700;color:var(--primary);">${formatPrice(order.total_amount)}</span>
+            </div>
+            ${order.slip_image_url ? `
+              <div style="margin-top:12px;">
+                <div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:6px;">สลิปที่แนบ:</div>
+                <a href="${order.slip_image_url}" target="_blank">
+                  <img src="${order.slip_image_url}" style="max-height:100px;border-radius:8px;border:1px solid var(--border);">
+                </a>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    (async () => {
+      await initNavbar();
+      await loadOrders();
+    })();
+  </script>
+</body>
+</html>

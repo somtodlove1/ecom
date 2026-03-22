@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สมาชิก | Admin ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">🛍 ShopZone</div>
+      <ul class="sidebar-nav">
+        <li><a href="/admin">📊 แดชบอร์ด</a></li>
+        <li><a href="/admin/products">📦 จัดการสินค้า</a></li>
+        <li><a href="/admin/orders">🧾 จัดการออเดอร์</a></li>
+        <li><a href="/admin/members" class="active">👥 สมาชิก</a></li>
+        <li><a href="/">🏠 หน้าร้าน</a></li>
+        <li><a href="#" onclick="logout()">🚪 ออกจากระบบ</a></li>
+      </ul>
+    </aside>
+
+    <div class="admin-content">
+      <div class="admin-header">
+        <div>
+          <h2 style="font-weight:700;">สมาชิกทั้งหมด</h2>
+          <p style="color:var(--text-muted);font-size:0.85rem;" id="member-count">โหลด...</p>
+        </div>
+        <div class="search-bar" style="max-width:280px;">
+          <input type="text" id="search" placeholder="ค้นหาสมาชิก..." oninput="filterMembers()">
+          <button>🔍</button>
+        </div>
+      </div>
+
+      <div class="admin-body">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>ชื่อผู้ใช้</th><th>ชื่อ-นามสกุล</th>
+                <th>อีเมล</th><th>โทร</th><th>บทบาท</th><th>วันที่สมัคร</th>
+              </tr></thead>
+              <tbody id="members-body">
+                <tr><td colspan="7" style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    let allMembers = [];
+
+    function filterMembers() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = allMembers.filter(m =>
+        m.username.toLowerCase().includes(q) ||
+        (m.full_name || '').toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q)
+      );
+      renderMembers(filtered);
+    }
+
+    function renderMembers(members) {
+      document.getElementById('members-body').innerHTML = members.length ? members.map(m => `
+        <tr>
+          <td style="color:var(--text-muted);">${m.id}</td>
+          <td style="font-weight:600;">@${m.username}</td>
+          <td>${m.full_name || '-'}</td>
+          <td style="color:var(--text-muted);">${m.email}</td>
+          <td>${m.phone || '-'}</td>
+          <td>
+            <span class="status-badge ${m.role === 'admin' ? 'status-confirmed' : 'status-shipping'}">
+              ${m.role === 'admin' ? '👑 แอดมิน' : '👤 สมาชิก'}
+            </span>
+          </td>
+          <td style="color:var(--text-muted);font-size:0.82rem;">${formatDate(m.created_at)}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">ไม่พบสมาชิก</td></tr>';
+    }
+
+    (async () => {
+      const me = await api('/api/auth/me');
+      if (!me.success || !me.user || me.user.role !== 'admin') { window.location.href = '/login'; return; }
+      const data = await api('/api/members');
+      allMembers = data.success ? data.members : [];
+      document.getElementById('member-count').textContent = `สมาชิกทั้งหมด ${allMembers.length} คน`;
+      renderMembers(allMembers);
+    })();
+  </script>
+</body>
+</html>

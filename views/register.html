@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สมัครสมาชิก | ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 40px 20px; }
+    .auth-wrap { width: 100%; max-width: 480px; }
+    .auth-logo { text-align: center; margin-bottom: 32px; }
+    .auth-logo h1 {
+      font-size: 2.2rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .auth-bg {
+      position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse at 30% 30%, rgba(67,198,172,0.1) 0%, transparent 60%),
+                  radial-gradient(ellipse at 80% 70%, rgba(108,99,255,0.1) 0%, transparent 50%);
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  </style>
+</head>
+<body>
+  <div class="auth-bg"></div>
+  <div class="auth-wrap">
+    <div class="auth-logo">
+      <h1>🛍 ShopZone</h1>
+      <p style="color:var(--text-muted);">สร้างบัญชีใหม่วันนี้</p>
+    </div>
+    <div class="card" style="padding:36px;">
+      <div style="font-size:1.4rem;font-weight:700;margin-bottom:8px;">สมัครสมาชิก</div>
+      <div style="color:var(--text-muted);font-size:0.9rem;margin-bottom:28px;">กรอกข้อมูลเพื่อสร้างบัญชีของคุณ</div>
+
+      <div id="alert-box"></div>
+
+      <form id="register-form">
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">ชื่อผู้ใช้ *</label>
+            <input type="text" class="form-control" id="username" placeholder="ชื่อผู้ใช้" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ชื่อ-นามสกุล</label>
+            <input type="text" class="form-control" id="full_name" placeholder="ชื่อ-นามสกุล">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">อีเมล *</label>
+          <input type="email" class="form-control" id="email" placeholder="example@email.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">เบอร์โทรศัพท์</label>
+          <input type="tel" class="form-control" id="phone" placeholder="0xx-xxx-xxxx">
+        </div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">รหัสผ่าน *</label>
+            <input type="password" class="form-control" id="password" placeholder="อย่างน้อย 6 ตัวอักษร" required minlength="6">
+          </div>
+          <div class="form-group">
+            <label class="form-label">ยืนยันรหัสผ่าน *</label>
+            <input type="password" class="form-control" id="confirm" placeholder="ยืนยันรหัสผ่าน" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;" id="reg-btn">
+          สมัครสมาชิก
+        </button>
+      </form>
+
+      <div style="text-align:center;margin-top:20px;font-size:0.9rem;color:var(--text-muted);">
+        มีบัญชีแล้ว? <a href="/login" style="color:var(--primary);">เข้าสู่ระบบ</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+      if (password !== confirm) {
+        document.getElementById('alert-box').innerHTML = `<div class="alert alert-danger">รหัสผ่านไม่ตรงกัน</div>`;
+        return;
+      }
+
+      const btn = document.getElementById('reg-btn');
+      btn.disabled = true; btn.textContent = 'กำลังสมัคร...';
+
+      const data = await api('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          email: document.getElementById('email').value,
+          password,
+          full_name: document.getElementById('full_name').value,
+          phone: document.getElementById('phone').value
+        })
+      });
+
+      if (data.success) {
+        document.getElementById('alert-box').innerHTML = `<div class="alert alert-success">✅ สมัครสมาชิกสำเร็จ! กำลังพาไปหน้าเข้าสู่ระบบ...</div>`;
+        setTimeout(() => window.location.href = '/login', 1500);
+      } else {
+        document.getElementById('alert-box').innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+        btn.disabled = false; btn.textContent = 'สมัครสมาชิก';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ตะกร้าสินค้า | ShopZone</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .cart-layout { display: grid; grid-template-columns: 1fr 340px; gap: 32px; }
+    .cart-item { display: flex; gap: 20px; padding: 20px; margin-bottom: 16px;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); align-items: center; }
+    .cart-img { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; background: var(--bg-card2); flex-shrink: 0; }
+    .summary-card { background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px; position: sticky; top: 90px; height: fit-content; }
+    .summary-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 0.9rem; }
+    .summary-total { font-size: 1.4rem; font-weight: 700; color: var(--primary); }
+    @media (max-width: 768px) { .cart-layout { grid-template-columns: 1fr; } .summary-card { position: static; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">🛍 ShopZone</a>
+    <ul class="navbar-nav">
+      <a href="/">หน้าหลัก</a>
+      <span id="nav-admin" style="display:none;"><a href="/admin">⚙️ แอดมิน</a></span>
+      <a href="/cart" class="cart-badge active">🛒 ตะกร้า<span class="badge" id="cart-count" style="display:none;">0</span></a>
+      <span id="nav-auth"></span>
+    </ul>
+  </nav>
+
+  <div class="container section">
+    <h1 class="section-title">🛒 ตะกร้าสินค้า</h1>
+    
+    <div id="cart-loading" class="flex-center" style="padding:80px;"><div class="spinner"></div></div>
+
+    <div id="cart-layout" class="cart-layout hidden">
+      <div>
+        <div class="flex-between mb-16">
+          <span id="cart-item-count" style="color:var(--text-muted);font-size:0.9rem;"></span>
+          <button class="btn btn-danger btn-sm" onclick="clearCart()">🗑 ล้างตะกร้า</button>
+        </div>
+        <div id="cart-items"></div>
+      </div>
+      <div>
+        <div class="summary-card">
+          <div style="font-size:1.1rem;font-weight:700;margin-bottom:20px;">สรุปคำสั่งซื้อ</div>
+          <div class="summary-row"><span style="color:var(--text-muted);">ราคาสินค้า</span><span id="sub-total">฿0</span></div>
+          <div class="summary-row"><span style="color:var(--text-muted);">ค่าจัดส่ง</span><span style="color:var(--success);">ฟรี</span></div>
+          <hr style="border-color:var(--border);margin:16px 0;">
+          <div class="summary-row"><span style="font-weight:700;">รวมทั้งหมด</span><span class="summary-total" id="grand-total">฿0</span></div>
+          <a href="/checkout" class="btn btn-primary" style="width:100%;margin-top:20px;" id="checkout-btn">
+            ชำระเงิน →
+          </a>
+          <a href="/" class="btn btn-secondary" style="width:100%;margin-top:10px;text-align:center;">
+            ← ช้อปต่อ
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div id="cart-empty" class="empty-state hidden">
+      <div class="icon">🛒</div>
+      <h3>ตะกร้าสินค้าว่างเปล่า</h3>
+      <p style="color:var(--text-muted);margin-bottom:20px;">เพิ่มสินค้าที่คุณชอบลงในตะกร้า</p>
+      <a href="/" class="btn btn-primary">ช้อปสินค้าเลย</a>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    async function loadCart() {
+      const data = await api('/api/cart');
+      document.getElementById('cart-loading').classList.add('hidden');
+
+      if (!data.success) {
+        if (data.message?.includes('เข้าสู่ระบบ')) {
+          showToast('กรุณาเข้าสู่ระบบก่อน', 'warning');
+          setTimeout(() => window.location.href = '/login', 1500);
+          return;
+        }
+        return;
+      }
+
+      if (data.items.length === 0) {
+        document.getElementById('cart-empty').classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('cart-layout').classList.remove('hidden');
+      document.getElementById('cart-item-count').textContent = `${data.items.length} รายการ`;
+
+      // Render items
+      const container = document.getElementById('cart-items');
+      container.innerHTML = data.items.map(item => `
+        <div class="cart-item" id="item-${item.id}">
+          <img class="cart-img" src="${item.image_url || ''}" alt="${item.name}"
+               onerror="this.src='https://placehold.co/90x90/161628/6C63FF?text=?'">
+          <div style="flex:1;">
+            <div style="font-weight:600;margin-bottom:4px;">${item.name}</div>
+            <div style="color:var(--primary);font-weight:700;">${formatPrice(item.price)}</div>
+          </div>
+          <div class="qty-control">
+            <button class="qty-btn" onclick="updateQty(${item.id}, ${item.quantity - 1})">−</button>
+            <span class="qty-display" id="qty-${item.id}">${item.quantity}</span>
+            <button class="qty-btn" onclick="updateQty(${item.id}, ${item.quantity + 1})">+</button>
+          </div>
+          <div style="text-align:right;min-width:100px;">
+            <div style="font-weight:700;" id="subtotal-${item.id}">${formatPrice(item.price * item.quantity)}</div>
+            <button class="btn btn-danger btn-sm" style="margin-top:8px;" onclick="removeItem(${item.id})">ลบ</button>
+          </div>
+        </div>
+      `).join('');
+
+      updateTotals(data.items);
+    }
+
+    function updateTotals(items) {
+      const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
+      document.getElementById('sub-total').textContent = formatPrice(total);
+      document.getElementById('grand-total').textContent = formatPrice(total);
+    }
+
+    async function updateQty(cartItemId, newQty) {
+      if (newQty < 1) { await removeItem(cartItemId); return; }
+      const data = await api('/api/cart/update', {
+        method: 'PUT',
+        body: JSON.stringify({ cart_item_id: cartItemId, quantity: newQty })
+      });
+      if (data.success) await loadCart();
+      else showToast(data.message, 'error');
+    }
+
+    async function removeItem(cartItemId) {
+      const data = await api(`/api/cart/remove/${cartItemId}`, { method: 'DELETE' });
+      if (data.success) {
+        showToast('ลบสินค้าออกแล้ว', 'info');
+        await loadCart();
+      }
+    }
+
+    async function clearCart() {
+      if (!confirm('ล้างตะกร้าสินค้าทั้งหมดหรือไม่?')) return;
+      const data = await api('/api/cart/clear', { method: 'DELETE' });
+      if (data.success) { showToast('ล้างตะกร้าแล้ว', 'info'); await loadCart(); }
+    }
+
+    (async () => {
+      await initNavbar();
+      await loadCart();
+    })();
+  </script>
+</body>
+</html>
