@@ -1,7 +1,13 @@
--- ============================================
--- E-Commerce Database Schema (PostgreSQL Version)
--- ============================================
+const { Pool } = require('pg');
 
+const connectionString = 'postgresql://e_commerce_llwg_user:iRnBj0VXvzO1E6gcqHEGwtnKCUShrhn1@dpg-d6vr5594tr6s73dprk4g-a.singapore-postgres.render.com/e_commerce_llwg';
+
+const pool = new Pool({
+  connectionString: connectionString,
+  ssl: { rejectUnauthorized: false }
+});
+
+const sqlQuery = `
 -- Users Table
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -58,7 +64,7 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Function and Trigger for updated_at in PostgreSQL
+-- Function and Trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -82,17 +88,12 @@ CREATE TABLE IF NOT EXISTS order_items (
   price DECIMAL(10,2) NOT NULL
 );
 
--- ============================================
--- Seed Data
--- ============================================
-
--- Default admin user (password: admin123)
--- Using DO NOTHING for PostgreSQL to handle conflicts gracefully without errors on re-run
+-- Seed Data (Users)
 INSERT INTO users (username, email, password_hash, role, full_name) VALUES
 ('admin', 'admin@shop.com', '$2a$10$rQnhyKTrexzqBkQ5RxJxUuzL0C/bxK.u3blrS1PH6OopJRHQcHyDG', 'admin', 'ผู้ดูแลระบบ')
 ON CONFLICT (username) DO NOTHING;
 
--- Categories
+-- Seed Data (Categories)
 INSERT INTO categories (name, slug) VALUES
 ('อิเล็กทรอนิกส์', 'electronics'),
 ('เสื้อผ้า', 'clothing'),
@@ -102,7 +103,7 @@ INSERT INTO categories (name, slug) VALUES
 ('ของใช้ในบ้าน', 'home')
 ON CONFLICT (slug) DO NOTHING;
 
--- Sample Products
+-- Seed Data (Products)
 INSERT INTO products (name, description, price, stock, image_url, category_id) VALUES
 ('หูฟัง Bluetooth Pro', 'หูฟังไร้สายคุณภาพสูง เสียงคมชัด ตัดเสียงรบกวน', 1290.00, 50, '/uploads/products/product1.jpg', 1),
 ('สมาร์ทวอทช์ Gen5', 'นาฬิกาอัจฉริยะ ติดตามสุขภาพ กันน้ำ 50m', 3590.00, 30, '/uploads/products/product2.jpg', 1),
@@ -115,4 +116,20 @@ INSERT INTO products (name, description, price, stock, image_url, category_id) V
 ('หม้อทอดไร้น้ำมัน 5L', 'หม้อทอดอากาศ ประหยัดพลังงาน ความจุ 5 ลิตร', 2290.00, 25, '/uploads/products/product9.jpg', 6),
 ('ชุดเครื่องนอน Cotton', 'ชุดผ้าปูที่นอน Cotton 100% ขนาด 6 ฟุต', 1190.00, 35, '/uploads/products/product10.jpg', 6),
 ('กาแฟ Arabica คั่วกลาง 250g', 'เมล็ดกาแฟอาราบิก้า คั่วกลาง หอม เข้มข้น', 280.00, 100, '/uploads/products/product11.jpg', 3),
-('น้ำผึ้งแท้ 100% 500ml', 'น้ำผึ้งธรรมชาติ จากดอกลำไย บริสุทธิ์ 100%', 320.00, 75, '/uploads/products/product12.jpg', 3);
+('น้ำผึ้งแท้ 100% 500ml', 'น้ำผึ้งธรรมชาติ จากดอกลำไย บริสุทธิ์ 100%', 320.00, 75, '/uploads/products/product12.jpg', 3)
+ON CONFLICT DO NOTHING;
+`;
+
+async function executeSQL() {
+  try {
+    console.log('⏳ กำลังเชื่อมต่อและสร้างตารางฐานข้อมูล...');
+    await pool.query(sqlQuery);
+    console.log('✅ สร้างตารางและใส่ข้อมูลสำเร็จ 100%!');
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error);
+  } finally {
+    pool.end();
+  }
+}
+
+executeSQL();

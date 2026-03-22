@@ -44,7 +44,7 @@ app.get('/api/members', async (req, res) => {
   }
   try {
     const db = require('./config/db');
-    const [members] = await db.execute(
+    const { rows: members } = await db.query(
       'SELECT id, username, email, full_name, phone, role, created_at FROM users ORDER BY created_at DESC'
     );
     res.json({ success: true, members });

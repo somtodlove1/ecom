@@ -13,16 +13,17 @@ router.get('/', async (req, res) => {
       SELECT p.*, c.name as category_name 
       FROM products p 
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.is_active = 1
+      WHERE p.is_active = true
     `;
     const params = [];
+    let paramCount = 1;
 
     if (search) {
-      query += ' AND (p.name LIKE ? OR p.description LIKE ?)';
+      query += ` AND (p.name ILIKE $${paramCount++} OR p.description ILIKE $${paramCount++})`;
       params.push(`%${search}%`, `%${search}%`);
     }
     if (category) {
-      query += ' AND c.slug = ?';
+      query += ` AND c.slug = $${paramCount++}`;
       params.push(category);
     }
 
@@ -31,7 +32,7 @@ router.get('/', async (req, res) => {
     else if (sort === 'newest') query += ' ORDER BY p.created_at DESC';
     else query += ' ORDER BY p.id ASC';
 
-    const [products] = await db.execute(query, params);
+    const { rows: products } = await db.query(query, params);
     res.json({ success: true, products });
   } catch (err) {
     console.error(err);
@@ -42,10 +43,10 @@ router.get('/', async (req, res) => {
 // GET single product
 router.get('/:id', async (req, res) => {
   try {
-    const [rows] = await db.execute(
+    const { rows } = await db.query(
       `SELECT p.*, c.name as category_name 
        FROM products p LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.id = ? AND p.is_active = 1`,
+       WHERE p.id = $1 AND p.is_active = true`,
       [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบสินค้า' });
@@ -59,7 +60,7 @@ router.get('/:id', async (req, res) => {
 // GET all categories
 router.get('/cats/all', async (req, res) => {
   try {
-    const [cats] = await db.execute('SELECT * FROM categories');
+    const { rows: cats } = await db.query('SELECT * FROM categories');
     res.json({ success: true, categories: cats });
   } catch (err) {
     res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาด' });
@@ -72,8 +73,8 @@ router.post('/', isAdmin, uploadProduct.single('image'), async (req, res) => {
     const { name, description, price, stock, category_id } = req.body;
     const image_url = req.file ? `/uploads/products/${req.file.filename}` : '/uploads/products/default.jpg';
 
-    await db.execute(
-      'INSERT INTO products (name, description, price, stock, image_url, category_id) VALUES (?, ?, ?, ?, ?, ?)',
+    await db.query(
+      'INSERT INTO products (name, description, price, stock, image_url, category_id) VALUES ($1, $2, $3, $4, $5, $6)',
       [name, description, price, stock || 0, image_url, category_id || null]
     );
     res.json({ success: true, message: 'เพิ่มสินค้าสำเร็จ' });
@@ -87,13 +88,13 @@ router.post('/', isAdmin, uploadProduct.single('image'), async (req, res) => {
 router.put('/:id', isAdmin, uploadProduct.single('image'), async (req, res) => {
   try {
     const { name, description, price, stock, category_id, is_active } = req.body;
-    const [existing] = await db.execute('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    const { rows: existing } = await db.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบสินค้า' });
 
     const image_url = req.file ? `/uploads/products/${req.file.filename}` : existing[0].image_url;
 
-    await db.execute(
-      'UPDATE products SET name=?, description=?, price=?, stock=?, image_url=?, category_id=?, is_active=? WHERE id=?',
+    await db.query(
+      'UPDATE products SET name=$1, description=$2, price=$3, stock=$4, image_url=$5, category_id=$6, is_active=$7 WHERE id=$8',
       [name, description, price, stock, image_url, category_id || null, is_active !== undefined ? is_active : existing[0].is_active, req.params.id]
     );
     res.json({ success: true, message: 'อัปเดตสินค้าสำเร็จ' });
@@ -106,7 +107,7 @@ router.put('/:id', isAdmin, uploadProduct.single('image'), async (req, res) => {
 // DELETE product (admin)
 router.delete('/:id', isAdmin, async (req, res) => {
   try {
-    await db.execute('UPDATE products SET is_active = 0 WHERE id = ?', [req.params.id]);
+    await db.query('UPDATE products SET is_active = false WHERE id = $1', [req.params.id]);
     res.json({ success: true, message: 'ลบสินค้าสำเร็จ' });
   } catch (err) {
     console.error(err);
@@ -117,7 +118,7 @@ router.delete('/:id', isAdmin, async (req, res) => {
 // GET all products for admin (including inactive)
 router.get('/admin/all', isAdmin, async (req, res) => {
   try {
-    const [products] = await db.execute(
+    const { rows: products } = await db.query(
       `SELECT p.*, c.name as category_name FROM products p 
        LEFT JOIN categories c ON p.category_id = c.id ORDER BY p.id DESC`
     );

@@ -12,16 +12,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
     }
 
-    const [existing] = await db.execute(
-      'SELECT id FROM users WHERE username = ? OR email = ?', [username, email]
+    const { rows: existing } = await db.query(
+      'SELECT id FROM users WHERE username = $1 OR email = $2', [username, email]
     );
     if (existing.length > 0) {
       return res.status(409).json({ success: false, message: 'ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้แล้ว' });
     }
 
     const hash = await bcrypt.hash(password, 10);
-    await db.execute(
-      'INSERT INTO users (username, email, password_hash, full_name, phone) VALUES (?, ?, ?, ?, ?)',
+    await db.query(
+      'INSERT INTO users (username, email, password_hash, full_name, phone) VALUES ($1, $2, $3, $4, $5)',
       [username, email, hash, full_name || '', phone || '']
     );
 
@@ -40,8 +40,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
     }
 
-    const [users] = await db.execute(
-      'SELECT * FROM users WHERE username = ? OR email = ?', [username, username]
+    const { rows: users } = await db.query(
+      'SELECT * FROM users WHERE username = $1 OR email = $2', [username, username]
     );
     if (users.length === 0) {
       return res.status(401).json({ success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
@@ -94,8 +94,8 @@ router.put('/profile', async (req, res) => {
   }
   try {
     const { full_name, phone, address } = req.body;
-    await db.execute(
-      'UPDATE users SET full_name=?, phone=?, address=? WHERE id=?',
+    await db.query(
+      'UPDATE users SET full_name=$1, phone=$2, address=$3 WHERE id=$4',
       [full_name, phone, address, req.session.user.id]
     );
     req.session.user.full_name = full_name;
@@ -112,8 +112,8 @@ router.get('/profile', async (req, res) => {
     return res.status(401).json({ success: false, message: 'กรุณาเข้าสู่ระบบ' });
   }
   try {
-    const [users] = await db.execute(
-      'SELECT id, username, email, full_name, phone, address, role, created_at FROM users WHERE id = ?',
+    const { rows: users } = await db.query(
+      'SELECT id, username, email, full_name, phone, address, role, created_at FROM users WHERE id = $1',
       [req.session.user.id]
     );
     if (users.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
@@ -135,14 +135,14 @@ router.put('/password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณากรอกรหัสผ่านให้ครบถ้วน' });
     }
 
-    const [users] = await db.execute('SELECT password_hash FROM users WHERE id = ?', [req.session.user.id]);
+    const { rows: users } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.session.user.id]);
     if (users.length === 0) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
 
     const match = await bcrypt.compare(old_password, users[0].password_hash);
     if (!match) return res.status(400).json({ success: false, message: 'รหัสผ่านเดิมไม่ถูกต้อง' });
 
     const hash = await bcrypt.hash(new_password, 10);
-    await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.session.user.id]);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.session.user.id]);
 
     res.json({ success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จ' });
   } catch (err) {
